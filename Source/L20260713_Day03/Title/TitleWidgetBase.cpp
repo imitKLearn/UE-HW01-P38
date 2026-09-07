@@ -41,6 +41,7 @@ void UTitleWidgetBase::NativeConstruct()
 	{
 		WebApi->OnLoginResult.AddUniqueDynamic(this, &UTitleWidgetBase::ProcessLoginResult);
 		WebApi->OnSignUpResult.AddUniqueDynamic(this, &UTitleWidgetBase::ProcessSignUpResult);
+		WebApi->OnRegisterServerResult.AddUniqueDynamic(this, &UTitleWidgetBase::ProcessRegisterServerResult);
 	}
 }
 
@@ -52,13 +53,22 @@ void UTitleWidgetBase::StartServer()
 		return;
 	}
 
+	if (bRequestInFlight)
+	{
+		return;
+	}
+
 	SaveData();
 
-	UGameplayStatics::OpenLevel(GetWorld(),
-		TEXT("Lobby"),
-		true,
-		TEXT("Listen")
-	);
+	// 웹서버에 이 PC를 게임 서버로 등록하고, 성공 응답을 받은 뒤에 레벨을 연다.
+	if (UWebApiSubsystem* WebApi = GetWebApi())
+	{
+		SetInfoText(TEXT("서버 등록 중..."));
+
+		// IP 탐지에 실패하면 델리게이트가 즉시 울리므로 플래그를 먼저 세운다.
+		bRequestInFlight = true;
+		WebApi->RequestRegisterServer(ServerIP->GetText().ToString());
+	}
 }
 
 void UTitleWidgetBase::ConnectServer()
@@ -69,10 +79,16 @@ void UTitleWidgetBase::ConnectServer()
 		return;
 	}
 
+	if (!GameServerIP || GameServerIP->GetText().IsEmptyOrWhitespace())
+	{
+		SetInfoText(TEXT("접속할 게임 서버 주소가 없습니다"));
+		return;
+	}
+
 	SaveData();
 
 	UGameplayStatics::OpenLevel(GetWorld(),
-		FName(ServerIP->GetText().ToString()),
+		FName(GameServerIP->GetText().ToString()),
 		true,
 		TEXT("Key=100")
 	);
@@ -159,7 +175,20 @@ void UTitleWidgetBase::ProcessLoginResult(const bool bInSuccess, const FString& 
 	UDataGameInstanceSubsystem* Data = GI ? GI->GetSubsystem<UDataGameInstanceSubsystem>() : nullptr;
 	if (Data)
 	{
-		SetInfoText(FString::Printf(TEXT("%s (Lv.%d)"), *Data->Nickname, Data->Level));
+		if (Data->GameServerIP.IsEmpty())
+		{
+			SetInfoText(FString::Printf(TEXT("%s (Lv.%d) / 등록된 서버 없음"), *Data->Nickname, Data->Level));
+		}
+		else
+		{
+			// 받은 게임 서버 주소를 채워두면 사용자가 손으로 옮겨적지 않아도 된다.
+			if (GameServerIP)
+			{
+				GameServerIP->SetText(FText::FromString(Data->GameServerIP));
+			}
+
+			SetInfoText(FString::Printf(TEXT("%s (Lv.%d) / 서버 %s"), *Data->Nickname, Data->Level, *Data->GameServerIP));
+		}
 	}
 
 	if (StartServerButton)
@@ -178,6 +207,23 @@ void UTitleWidgetBase::ProcessSignUpResult(const bool bInSuccess, const FString&
 	bRequestInFlight = false;
 
 	SetInfoText(bInSuccess ? TEXT("가입이 완료되었습니다. 로그인해 주세요.") : InMessage);
+}
+
+void UTitleWidgetBase::ProcessRegisterServerResult(const bool bInSuccess, const FString& InMessage)
+{
+	bRequestInFlight = false;
+
+	if (!bInSuccess)
+	{
+		SetInfoText(FString::Printf(TEXT("서버 등록 실패: %s"), *InMessage));
+		return;
+	}
+
+	UGameplayStatics::OpenLevel(GetWorld(),
+		TEXT("Lobby"),
+		true,
+		TEXT("Listen")
+	);
 }
 
 UWebApiSubsystem* UTitleWidgetBase::GetWebApi() const
@@ -208,6 +254,7 @@ void UTitleWidgetBase::ClearLoginState()
 		Data->Idx = 0;
 		Data->Nickname.Empty();
 		Data->Level = 0;
+		Data->GameServerIP.Empty();
 	}
 
 	if (StartServerButton)

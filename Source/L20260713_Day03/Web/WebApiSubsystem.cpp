@@ -9,11 +9,33 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
 #include "../DataGameInstanceSubsystem.h"
 
 namespace
 {
 	constexpr int32 WebServerPort = 8080;
+
+	// 이 PC의 LAN IP. 구할 수 없으면 빈 문자열을 돌려준다.
+	FString GetLocalIPAddress()
+	{
+		ISocketSubsystem* Sockets = ISocketSubsystem::Get();
+		if (!Sockets)
+		{
+			return FString();
+		}
+
+		bool bCanBindAll = false;
+		TSharedPtr<FInternetAddr> LocalAddr = Sockets->GetLocalHostAddr(*GLog, bCanBindAll);
+		if (!LocalAddr.IsValid() || !LocalAddr->IsValid())
+		{
+			return FString();
+		}
+
+		// 포트 없이 IP만 필요하다.
+		return LocalAddr->ToString(false);
+	}
 }
 
 void UWebApiSubsystem::RequestLogin(const FString& InServerIP, const FString& InUserID, const FString& InPassword)
@@ -26,6 +48,21 @@ void UWebApiSubsystem::RequestSignUp(const FString& InServerIP, const FString& I
 	SendAuthRequest(InServerIP, TEXT("/signup"), InUserID, InPassword, OnSignUpResult, false);
 }
 
+void UWebApiSubsystem::RequestRegisterServer(const FString& InServerIP)
+{
+	const FString LocalIP = GetLocalIPAddress();
+	if (LocalIP.IsEmpty())
+	{
+		OnRegisterServerResult.Broadcast(false, TEXT("이 PC의 IP를 확인할 수 없습니다"));
+		return;
+	}
+
+	TSharedRef<FJsonObject> JsonObject = MakeShared<FJsonObject>();
+	JsonObject->SetStringField(TEXT("ip"), LocalIP);
+
+	SendJsonRequest(InServerIP, TEXT("/register_server"), JsonObject, OnRegisterServerResult, false);
+}
+
 void UWebApiSubsystem::SendAuthRequest(const FString& InServerIP, const FString& InPath,
 	const FString& InUserID, const FString& InPassword,
 	FWebApiResultSignature& InDelegate, const bool bInIsLogin)
@@ -34,9 +71,16 @@ void UWebApiSubsystem::SendAuthRequest(const FString& InServerIP, const FString&
 	JsonObject->SetStringField(TEXT("user_id"), InUserID);
 	JsonObject->SetStringField(TEXT("passwd"), InPassword);
 
+	SendJsonRequest(InServerIP, InPath, JsonObject, InDelegate, bInIsLogin);
+}
+
+void UWebApiSubsystem::SendJsonRequest(const FString& InServerIP, const FString& InPath,
+	const TSharedRef<FJsonObject>& InBody,
+	FWebApiResultSignature& InDelegate, const bool bInIsLogin)
+{
 	FString Body;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Body);
-	FJsonSerializer::Serialize(JsonObject, Writer);
+	FJsonSerializer::Serialize(InBody, Writer);
 
 	const FString Url = FString::Printf(TEXT("http://%s:%d%s"), *InServerIP, WebServerPort, *InPath);
 	UE_LOG(LogTemp, Warning, TEXT("%s"), *Url);
@@ -105,6 +149,7 @@ void UWebApiSubsystem::HandleAuthResponse(FHttpResponsePtr InResponse, const boo
 			Data->Idx = JsonObject->GetIntegerField(TEXT("idx"));
 			Data->Nickname = JsonObject->GetStringField(TEXT("nickname"));
 			Data->Level = JsonObject->GetIntegerField(TEXT("level"));
+			Data->GameServerIP = JsonObject->GetStringField(TEXT("server_ip"));
 			Data->bLoggedIn = true;
 		}
 	}

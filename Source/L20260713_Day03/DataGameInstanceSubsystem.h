@@ -28,6 +28,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Data")
 	FString ServerIP;
 
+	// 로그인 응답으로 받은 게임 서버 IP. 웹서버 주소인 ServerIP와는 다른 값이다.
+	UPROPERTY(BlueprintReadOnly, Category = "Data")
+	FString GameServerIP;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Data")
 	bool bLoggedIn = false;
 

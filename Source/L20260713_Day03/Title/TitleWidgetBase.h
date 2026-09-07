@@ -37,8 +37,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Widget", meta = (BindWidget))
 	TObjectPtr<UEditableTextBox> Password;
 
+	// 웹서버 주소. 로그인/회원가입/서버등록 HTTP 요청의 대상이다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Widget", meta = (BindWidget))
 	TObjectPtr<UEditableTextBox> ServerIP;
+
+	// 게임 서버 주소. 로그인 응답으로 받은 값이 자동으로 채워진다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Widget", meta = (BindWidget))
+	TObjectPtr<UEditableTextBox> GameServerIP;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Widget", meta = (BindWidget))
 	TObjectPtr<UButton> LoginButton;
@@ -68,6 +73,9 @@ public:
 
 	UFUNCTION()
 	void ProcessSignUpResult(const bool bInSuccess, const FString& InMessage);
+
+	UFUNCTION()
+	void ProcessRegisterServerResult(const bool bInSuccess, const FString& InMessage);
 
 private:
 

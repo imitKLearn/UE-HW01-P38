@@ -18,7 +18,8 @@ public class L20260713_Day03 : ModuleRules
 			"UMG",
 			"HTTP",
 			"Json",
-			"JsonUtilities"
+			"JsonUtilities",
+			"Sockets"
 
         });
 

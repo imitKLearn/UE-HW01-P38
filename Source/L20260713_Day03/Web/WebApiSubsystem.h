@@ -7,6 +7,8 @@
 #include "Interfaces/IHttpRequest.h"
 #include "WebApiSubsystem.generated.h"
 
+class FJsonObject;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FWebApiResultSignature, const bool, bInSuccess, const FString&, InMessage);
 
 /**
@@ -25,14 +27,24 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WebApi")
 	FWebApiResultSignature OnSignUpResult;
 
+	UPROPERTY(BlueprintAssignable, Category = "WebApi")
+	FWebApiResultSignature OnRegisterServerResult;
+
 	void RequestLogin(const FString& InServerIP, const FString& InUserID, const FString& InPassword);
 
 	void RequestSignUp(const FString& InServerIP, const FString& InUserID, const FString& InPassword);
+
+	// 이 PC의 LAN IP를 게임 서버 주소로 웹서버에 등록한다.
+	void RequestRegisterServer(const FString& InServerIP);
 
 private:
 
 	void SendAuthRequest(const FString& InServerIP, const FString& InPath,
 		const FString& InUserID, const FString& InPassword,
+		FWebApiResultSignature& InDelegate, const bool bInIsLogin);
+
+	void SendJsonRequest(const FString& InServerIP, const FString& InPath,
+		const TSharedRef<FJsonObject>& InBody,
 		FWebApiResultSignature& InDelegate, const bool bInIsLogin);
 
 	void HandleAuthResponse(FHttpResponsePtr InResponse, const bool bInConnectedSuccessfully,
